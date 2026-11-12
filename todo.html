@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>タスク管理</title>
+<style>
+:root {
+  --bg: #f5f6f8; --panel: #ffffff; --text: #1f2328; --muted: #6b7280; --border: #e2e5ea;
+  --accent: #2563eb; --accent-weak: #dbe6fd;
+  --danger: #dc2626; --danger-bg: #fdecec; --warn: #b45309; --warn-bg: #fff6dc;
+  --ok: #15803d; --plan: #93b4f5; --actual: #2563eb; --over: #ef4444;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171b; --panel: #1e2126; --text: #e6e8eb; --muted: #9aa1ab; --border: #2f343b;
+    --accent: #5b8def; --accent-weak: #263a5f;
+    --danger: #f87171; --danger-bg: #3a1f22; --warn: #fbbf24; --warn-bg: #3a3120;
+    --ok: #4ade80; --plan: #3d5a8f; --actual: #6b9bf5; --over: #f87171;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.5 "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; border: 1px solid var(--border); background: var(--panel);
+  border-radius: 6px; padding: 4px 10px; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+input, select, textarea { background: var(--panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 8px; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 16px 40px; }
+
+/* header */
+header { position: sticky; top: 0; z-index: 20; background: var(--panel);
+  border-bottom: 1px solid var(--border); }
+header .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-block: 10px; }
+h1 { font-size: 18px; margin: 0; }
+.tabs { display: flex; gap: 4px; }
+.tabs button.active { background: var(--accent-weak); border-color: var(--accent); font-weight: 600; }
+.badges { display: flex; gap: 6px; }
+.badge { border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; border: none; }
+.badge.overdue { background: var(--danger-bg); color: var(--danger); }
+.badge.soon { background: var(--warn-bg); color: var(--warn); }
+.spacer { flex: 1; }
+.hdr-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* toolbar */
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0 10px; }
+.toolbar .quick { display: flex; gap: 6px; flex: 1 1 320px; }
+.toolbar .quick input { flex: 1; min-width: 0; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px;
+  color: var(--muted); font-size: 13px; }
+.filters label { display: flex; align-items: center; gap: 4px; }
+
+/* list */
+.list { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border);
+  flex-wrap: wrap; border-left: 4px solid transparent; }
+.row:last-child { border-bottom: none; }
+.row.overdue { background: var(--danger-bg); border-left-color: var(--danger); }
+.row.soon { background: var(--warn-bg); border-left-color: var(--warn); }
+.row .main { display: flex; align-items: center; gap: 8px; flex: 1 1 340px; min-width: 0; }
+.row .meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.toggle { width: 22px; height: 22px; padding: 0; border: none; background: none; color: var(--muted); flex: none; }
+.toggle.none { visibility: hidden; }
+.status { font-size: 12px; padding: 2px 4px; flex: none; }
+.status.st-todo { color: var(--muted); }
+.status.st-doing { color: var(--accent); font-weight: 600; }
+.status.st-done { color: var(--ok); }
+.status.st-hold { color: var(--warn); }
+.prio { flex: none; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center;
+  font-weight: 700; font-size: 12px; color: #fff; }
+.p1 { background: #dc2626; } .p2 { background: #ea580c; } .p3 { background: #ca8a04; }
+.p4 { background: #2563eb; } .p5 { background: #6b7280; }
+.title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.row.done .title { text-decoration: line-through; color: var(--muted); }
+.progress { font-size: 11px; color: var(--muted); margin-left: 6px; }
+.cat { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 1px 8px;
+  border-radius: 999px; border: 1px solid var(--c); color: var(--text); white-space: nowrap; }
+.cat::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.due-over { color: var(--danger); font-weight: 600; }
+.due-soon { color: var(--warn); font-weight: 600; }
+.actions { display: flex; gap: 4px; margin-left: auto; }
+.actions button { padding: 2px 8px; font-size: 12px; }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+
+/* dialog */
+dialog { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text);
+  width: min(640px, calc(100vw - 32px)); padding: 0; }
+dialog::backdrop { background: rgba(0,0,0,.4); }
+dialog form { padding: 20px; }
+dialog h2 { margin: 0 0 14px; font-size: 17px; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.grid .full { grid-column: 1 / -1; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.field > span { color: var(--muted); }
+.field input, .field select, .field textarea { width: 100%; }
+fieldset { border: 1px solid var(--border); border-radius: 8px; margin: 0; padding: 10px 12px 12px; }
+fieldset legend { color: var(--muted); font-size: 12px; padding: 0 4px; }
+fieldset .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dlg-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+@media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+.cat-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.cat-row input[type=text] { flex: 1; min-width: 0; }
+.cat-row input[type=color] { width: 40px; height: 32px; padding: 2px; }
+
+/* gantt */
+.gantt-nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0 10px; }
+.gantt-nav .range { font-weight: 600; margin: 0 6px; }
+.legend { display: flex; gap: 12px; font-size: 12px; color: var(--muted); margin-left: auto; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 18px; height: 8px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+.gantt-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+.gantt { position: relative; }
+.g-row { display: flex; border-bottom: 1px solid var(--border); min-height: 36px; }
+.g-row:last-child { border-bottom: none; }
+.g-label { position: sticky; left: 0; z-index: 2; flex: none; background: var(--panel);
+  border-right: 1px solid var(--border); display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px; font-size: 13px; overflow: hidden; white-space: nowrap; }
+.g-label .t { overflow: hidden; text-overflow: ellipsis; }
+.g-track { position: relative; flex: none; }
+.g-head .g-track { display: flex; }
+.g-day { flex: none; text-align: center; font-size: 11px; color: var(--muted); border-left: 1px solid var(--border);
+  line-height: 1.3; padding-top: 3px; }
+.g-day.we { background: color-mix(in srgb, var(--muted) 10%, transparent); }
+.g-day.today { color: var(--accent); font-weight: 700; }
+.g-month { position: absolute; top: 0; font-size: 11px; font-weight: 600; padding-left: 3px; }
+.bar { position: absolute; height: 9px; border-radius: 3px; }
+.bar.plan { top: 7px; background: var(--plan); }
+.bar.actual { top: 19px; background: var(--actual); }
+.bar.over { top: 19px; background: var(--over); }
+.bar.open { background: repeating-linear-gradient(45deg, var(--actual) 0 6px, transparent 6px 9px); border: 1px solid var(--actual); }
+.today-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); opacity: .6; z-index: 1; }
+.due-mark { position: absolute; top: 4px; width: 0; height: 0; border-left: 6px solid transparent;
+  border-right: 6px solid transparent; border-top: 9px solid var(--danger); transform: translateX(-6px); z-index: 1; }
+
+/* toast */
+#toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 100;
+  max-width: min(360px, calc(100vw - 32px)); }
+.toast { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent);
+  border-radius: 8px; padding: 10px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.15); animation: in .2s; }
+.toast.danger { border-left-color: var(--danger); }
+.toast.warn { border-left-color: var(--warn); }
+.toast b { display: block; margin-bottom: 2px; }
+@keyframes in { from { transform: translateY(10px); opacity: 0; } }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>📋 タスク管理</h1>
+    <div class="tabs">
+      <button data-view="list" class="active">リスト</button>
+      <button data-view="gantt">ガントチャート</button>
+    </div>
+    <div class="badges">
+      <button class="badge overdue" id="badgeOver" title="期限切れのタスクを表示">期限切れ 0</button>
+      <button class="badge soon" id="badgeSoon" title="期限間近のタスクを表示">期限間近 0</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="hdr-actions">
+      <button id="btnNotify" hidden>🔔 通知を許可</button>
+      <button id="btnSettings">カテゴリ・設定</button>
+      <button id="btnExport">エクスポート</button>
+      <button id="btnImport">インポート</button>
+      <input type="file" id="fileImport" accept="application/json" hidden>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- List view -->
+  <section id="viewList">
+    <div class="toolbar">
+      <form class="quick" id="quickAdd">
+        <input id="quickTitle" placeholder="新しいタスクを入力して Enter（詳細は「詳細追加」）" autocomplete="off">
+        <button class="primary" type="submit">追加</button>
+      </form>
+      <button id="btnAddDetail">詳細追加</button>
+      <button id="btnExpand">すべて展開</button>
+      <button id="btnCollapse">すべて折りたたみ</button>
+    </div>
+    <div class="filters">
+      <label>ステータス
+        <select id="fStatus">
+          <option value="">すべて</option>
+          <option value="open">未完了のみ</option>
+          <option value="todo">未着手</option>
+          <option value="doing">仕掛中</option>
+          <option value="done">完了</option>
+          <option value="hold">保留</option>
+        </select>
+      </label>
+      <label>カテゴリ <select id="fCat"></select></label>
+      <label>優先度
+        <select id="fPrio">
+          <option value="">すべて</option>
+          <option value="1">1</option><option value="2">2 以上</option><option value="3">3 以上</option>
+          <option value="4">4 以上</option>
+        </select>
+      </label>
+      <label>アラート
+        <select id="fAlert">
+          <option value="">すべて</option>
+          <option value="overdue">期限切れ</option>
+          <option value="soon">期限間近</option>
+          <option value="any">期限切れ＋間近</option>
+        </select>
+      </label>
+      <label>並び順
+        <select id="fSort">
+          <option value="manual">登録順</option>
+          <option value="priority">優先度</option>
+          <option value="due">期限</option>
+          <option value="plan">予定開始日</option>
+        </select>
+      </label>
+      <label>検索 <input id="fText" type="search" placeholder="タイトル・メモ"></label>
+    </div>
+    <div class="list" id="list"></div>
+  </section>
+
+  <!-- Gantt view -->
+  <section id="viewGantt" hidden>
+    <div class="gantt-nav">
+      <button id="gPrev">◀ 前へ</button>
+      <button id="gToday">今日</button>
+      <button id="gNext">次へ ▶</button>
+      <select id="gScale">
+        <option value="28">4週間</option>
+        <option value="91">3ヶ月</option>
+        <option value="182">6ヶ月</option>
+      </select>
+      <span class="range" id="gRange"></span>
+      <div class="legend">
+        <span><i style="background:var(--plan)"></i>予定</span>
+        <span><i style="background:var(--actual)"></i>実績</span>
+        <span><i style="background:repeating-linear-gradient(45deg,var(--actual) 0 4px,transparent 4px 6px);border:1px solid var(--actual)"></i>実績(進行中)</span>
+        <span><i style="background:var(--over)"></i>予定超過</span>
+        <span>▼ 期限</span>
+      </div>
+    </div>
+    <div class="gantt-wrap"><div class="gantt" id="gantt"></div></div>
+  </section>
+</main>
+
+<!-- Task dialog -->
+<dialog id="dlgTask">
+  <form id="taskForm" method="dialog">
+    <h2 id="dlgTitle">タスク</h2>
+    <div class="grid">
+      <label class="field full"><span>タイトル *</span><input name="title" required></label>
+      <label class="field"><span>親タスク</span><select name="parentId"></select></label>
+      <label class="field"><span>カテゴリ</span><select name="categoryId"></select></label>
+      <label class="field"><span>優先度（1=最高 〜 5=最低）</span>
+        <select name="priority">
+          <option value="1">1（最高）</option><option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option><option value="5">5（最低）</option>
+        </select>
+      </label>
+      <label class="field"><span>ステータス</span>
+        <select name="status">
+          <option value="todo">未着手</option><option value="doing">仕掛中</option>
+          <option value="done">完了</option><option value="hold">保留</option>
+        </select>
+      </label>
+      <fieldset class="full"><legend>予定</legend>
+        <div class="pair">
+          <label class="field"><span>開始日</span><input type="date" name="planStart"></label>
+          <label class="field"><span>終了日</span><input type="date" name="planEnd"></label>
+        </div>
+      </fieldset>
+      <fieldset class="full"><legend>実績（ステータス変更時に自動入力されます）</legend>
+        <div class="pair">
+          <label class="field"><span>開始日</span><input type="date" name="actualStart"></label>
+          <label class="field"><span>終了日</span><input type="date" name="actualEnd"></label>
+        </div>
+      </fieldset>
+      <label class="field"><span>期限</span><input type="datetime-local" name="dueAt"></label>
+      <label class="field"><span>リマインダー日時</span><input type="datetime-local" name="reminderAt"></label>
+      <label class="field full"><span>メモ</span><textarea name="memo" rows="3"></textarea></label>
+    </div>
+    <div class="dlg-actions">
+      <button type="button" id="btnCancelTask">キャンセル</button>
+      <button type="submit" class="primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Settings dialog -->
+<dialog id="dlgSettings">
+  <form id="settingsForm" method="dialog">
+    <h2>カテゴリ</h2>
+    <div id="catList"></div>
+    <button type="button" id="btnAddCat">＋ カテゴリ追加</button>
+    <h2 style="margin-top:20px">アラート設定</h2>
+    <label class="field"><span>「期限間近」とみなす時間（期限の何時間前から）</span>
+      <input type="number" id="soonHours" min="1" max="720" style="width:120px">
+    </label>
+    <div class="dlg-actions">
+      <button type="button" id="btnCancelSettings">キャンセル</button>
+      <button type="submit" class="primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toasts"></div>
+
+<script>
+'use strict';
+/* ========== Utilities ========== */
+const STORAGE_KEY = 'todoApp.v1';
+const DAY = 86400000;
+const STATUS = { todo: '未着手', doing: '仕掛中', done: '完了', hold: '保留' };
+const $ = (s, el = document) => el.querySelector(s);
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseYmd = s => { const [y, m, d] = s.slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); };
+const todayStr = () => ymd(new Date());
+const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+const md = s => s ? `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}` : '';
+const fmtDT = s => s ? `${md(s)} ${s.slice(11, 16)}` : '';
+const localDT = d => `${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* ========== State ========== */
+let state = load();
+const ui = { view: 'list', ganttStart: addDays(new Date(new Date().setHours(0, 0, 0, 0)), -7), editingId: null };
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (Array.isArray(s.tasks) && Array.isArray(s.categories)) {
+        s.settings = Object.assign({ soonHours: 24 }, s.settings);
+        return s;
+      }
+    }
+  } catch (e) { console.warn(e); }
+  return sampleData();
+}
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch (e) { toast('保存に失敗しました', e.message, 'danger'); }
+}
+
+function sampleData() {
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const d = n => ymd(addDays(t, n));
+  const dt = (n, h) => { const x = addDays(t, n); x.setHours(h); return localDT(x); };
+  const cats = [
+    { id: 'c1', name: '仕事', color: '#3b82f6' },
+    { id: 'c2', name: '個人', color: '#10b981' },
+    { id: 'c3', name: '学習', color: '#f59e0b' },
+  ];
+  const mk = (o) => Object.assign({
+    id: uid(), parentId: null, title: '', memo: '', priority: 3, categoryId: null, status: 'todo',
+    planStart: '', planEnd: '', actualStart: '', actualEnd: '', dueAt: '', reminderAt: '', reminded: false,
+    collapsed: false, createdAt: Date.now(),
+  }, o);
+  const p1 = mk({ title: 'Webサイトリニューアル', priority: 1, categoryId: 'c1', status: 'doing',
+    planStart: d(-6), planEnd: d(14), actualStart: d(-5), dueAt: dt(15, 18) });
+  const p1a = mk({ parentId: p1.id, title: '要件ヒアリング', priority: 2, categoryId: 'c1', status: 'done',
+    planStart: d(-6), planEnd: d(-3), actualStart: d(-5), actualEnd: d(-1) });
+  const p1b = mk({ parentId: p1.id, title: 'デザイン案作成', priority: 1, categoryId: 'c1', status: 'doing',
+    planStart: d(-2), planEnd: d(3), actualStart: d(-1), dueAt: dt(1, 17) });
+  const p1b1 = mk({ parentId: p1b.id, title: 'トップページ', priority: 2, categoryId: 'c1', status: 'doing',
+    planStart: d(-2), planEnd: d(0), actualStart: d(-1), dueAt: dt(-1, 18) });
+  const p1b2 = mk({ parentId: p1b.id, title: '下層ページ', priority: 3, categoryId: 'c1',
+    planStart: d(1), planEnd: d(3) });
+  const p1c = mk({ parentId: p1.id, title: '実装・テスト', priority: 2, categoryId: 'c1',
+    planStart: d(4), planEnd: d(14) });
+  const q = mk({ title: '資格試験の勉強', priority: 3, categoryId: 'c3', status: 'doing',
+    planStart: d(-10), planEnd: d(20), actualStart: d(-8), reminderAt: dt(0, 20) });
+  const r = mk({ title: '歯医者の予約', priority: 4, categoryId: 'c2', dueAt: dt(5, 12) });
+  return { tasks: [p1, p1a, p1b, p1b1, p1b2, p1c, q, r], categories: cats, settings: { soonHours: 24 } };
+}
+
+/* ========== Task helpers ========== */
+const byId = id => state.tasks.find(t => t.id === id);
+const childrenOf = pid => state.tasks.filter(t => (t.parentId || null) === (pid || null));
+function descendants(id) {
+  const out = [];
+  const walk = pid => childrenOf(pid).forEach(c => { out.push(c); walk(c.id); });
+  walk(id);
+  return out;
+}
+const catOf = id => state.categories.find(c => c.id === id);
+
+function alertOf(t) {
+  if (t.status === 'done' || !t.dueAt) return '';
+  const diff = new Date(t.dueAt).getTime() - Date.now();
+  if (diff < 0) return 'overdue';
+  if (diff <= state.settings.soonHours * 3600000) return 'soon';
+  return '';
+}
+
+function setStatus(t, status) {
+  const prev = t.status;
+  t.status = status;
+  const today = todayStr();
+  if ((status === 'doing' || status === 'done') && !t.actualStart) t.actualStart = today;
+  if (status === 'done' && !t.actualEnd) t.actualEnd = today;
+  if (prev === 'done' && status !== 'done') t.actualEnd = '';
+}
+
+function sortTasks(list) {
+  const mode = $('#fSort').value;
+  const big = '9999-99-99';
+  const cmp = {
+    manual: (a, b) => a.createdAt - b.createdAt,
+    priority: (a, b) => a.priority - b.priority || a.createdAt - b.createdAt,
+    due: (a, b) => (a.dueAt || big).localeCompare(b.dueAt || big) || a.priority - b.priority,
+    plan: (a, b) => (a.planStart || big).localeCompare(b.planStart || big) || a.priority - b.priority,
+  }[mode];
+  return list.slice().sort(cmp);
+}
+
+function matches(t) {
+  const st = $('#fStatus').value, cat = $('#fCat').value, pr = $('#fPrio').value,
+        al = $('#fAlert').value, tx = $('#fText').value.trim().toLowerCase();
+  if (st === 'open' && t.status === 'done') return false;
+  if (st && st !== 'open' && t.status !== st) return false;
+  if (cat === '__none' && t.categoryId) return false;
+  if (cat && cat !== '__none' && t.categoryId !== cat) return false;
+  if (pr && t.priority > Number(pr)) return false;
+  if (al) {
+    const a = alertOf(t);
+    if (al === 'any' ? !a : a !== al) return false;
+  }
+  if (tx && !(t.title + ' ' + t.memo).toLowerCase().includes(tx)) return false;
+  return true;
+}
+function filtersActive() {
+  return ['#fStatus', '#fCat', '#fPrio', '#fAlert', '#fText'].some(s => $(s).value.trim());
+}
+
+/** Returns a flat array of {task, depth, hasChildren} honoring filters (ancestors kept) and collapse. */
+function visibleRows() {
+  const filtering = filtersActive();
+  let keep = null;
+  if (filtering) {
+    keep = new Set();
+    state.tasks.filter(matches).forEach(t => {
+      let cur = t;
+      while (cur && !keep.has(cur.id)) { keep.add(cur.id); cur = cur.parentId ? byId(cur.parentId) : null; }
+    });
+  }
+  const rows = [];
+  const walk = (pid, depth) => {
+    sortTasks(childrenOf(pid)).forEach(t => {
+      if (keep && !keep.has(t.id)) return;
+      const kids = childrenOf(t.id).filter(c => !keep || keep.has(c.id));
+      rows.push({ task: t, depth, hasChildren: kids.length > 0, dim: keep && !matches(t) });
+      if (!t.collapsed) walk(t.id, depth + 1);
+    });
+  };
+  walk(null, 0);
+  return rows;
+}
+
+/* ========== Rendering: list ========== */
+function render() {
+  renderCatFilter();
+  renderBadges();
+  if (ui.view === 'list') renderList(); else renderGantt();
+}
+
+function renderCatFilter() {
+  const sel = $('#fCat'), cur = sel.value;
+  sel.innerHTML = '<option value="">すべて</option>' +
+    state.categories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('') +
+    '<option value="__none">（未分類）</option>';
+  sel.value = [...sel.options].some(o => o.value === cur) ? cur : '';
+}
+
+function renderBadges() {
+  let over = 0, soon = 0;
+  state.tasks.forEach(t => { const a = alertOf(t); if (a === 'overdue') over++; else if (a === 'soon') soon++; });
+  $('#badgeOver').textContent = `期限切れ ${over}`;
+  $('#badgeSoon').textContent = `期限間近 ${soon}`;
+  $('#badgeOver').style.opacity = over ? 1 : .5;
+  $('#badgeSoon').style.opacity = soon ? 1 : .5;
+}
+
+function renderList() {
+  const rows = visibleRows();
+  const el = $('#list');
+  if (!rows.length) {
+    el.innerHTML = `<div class="empty">${state.tasks.length ? '条件に一致するタスクはありません' : 'タスクがありません。上の入力欄から追加してください。'}</div>`;
+    return;
+  }
+  el.innerHTML = rows.map(({ task: t, depth, hasChildren, dim }) => {
+    const a = alertOf(t);
+    const c = catOf(t.categoryId);
+    const desc = descendants(t.id);
+    const prog = desc.length ? `<span class="progress">${desc.filter(d => d.status === 'done').length}/${desc.length} 完了</span>` : '';
+    const plan = t.planStart || t.planEnd ? `予定 ${md(t.planStart) || '?'}〜${md(t.planEnd) || '?'}` : '';
+    const act = t.actualStart ? `実績 ${md(t.actualStart)}〜${md(t.actualEnd) || '進行中'}` : '';
+    const due = t.dueAt ? `<span class="${a ? 'due-' + (a === 'overdue' ? 'over' : 'soon') : ''}">期限 ${fmtDT(t.dueAt)}${a === 'overdue' ? '（超過）' : ''}</span>` : '';
+    const rem = t.reminderAt ? `<span title="リマインダー ${fmtDT(t.reminderAt)}">${t.reminded ? '🔕' : '🔔'} ${fmtDT(t.reminderAt)}</span>` : '';
+    return `<div class="row ${a} ${t.status === 'done' ? 'done' : ''}" data-id="${t.id}" style="${dim ? 'opacity:.55' : ''}">
+      <div class="main" style="padding-left:${depth * 22}px">
+        <button class="toggle ${hasChildren ? '' : 'none'}" data-act="toggle" title="展開/折りたたみ">${t.collapsed ? '▶' : '▼'}</button>
+        <select class="status st-${t.status}" data-act="status">
+          ${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${k === t.status ? 'selected' : ''}>${v}</option>`).join('')}
+        </select>
+        <span class="prio p${t.priority}" title="優先度 ${t.priority}">${t.priority}</span>
+        <span class="title" title="${esc(t.memo)}">${esc(t.title)}${prog}</span>
+      </div>
+      <div class="meta">
+        ${c ? `<span class="cat" style="--c:${esc(c.color)}">${esc(c.name)}</span>` : ''}
+        ${plan ? `<span>${plan}</span>` : ''}${act ? `<span>${act}</span>` : ''}${due}${rem}
+      </div>
+      <div class="actions">
+        <button data-act="child" title="子タスクを追加">＋子</button>
+        <button data-act="edit" title="編集">編集</button>
+        <button data-act="delete" title="削除">削除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ========== Rendering: gantt ========== */
+function renderGantt() {
+  const days = Number($('#gScale').value);
+  const dw = days <= 28 ? 34 : days <= 91 ? 14 : 8;
+  const labelW = 260;
+  const start = ui.ganttStart;
+  const end = addDays(start, days - 1);
+  $('#gRange').textContent = `${start.getFullYear()}/${md(ymd(start))} 〜 ${end.getFullYear()}/${md(ymd(end))}`;
+  const idx = s => Math.round((parseYmd(s) - start) / DAY);
+  const today = idx(todayStr());
+  const trackW = days * dw;
+
+  // header
+  let head = '', months = '';
+  for (let i = 0; i < days; i++) {
+    const d = addDays(start, i);
+    const we = d.getDay() === 0 || d.getDay() === 6;
+    const show = dw >= 20 || d.getDate() === 1 || (dw >= 14 && d.getDay() === 1);
+    head += `<div class="g-day ${we ? 'we' : ''} ${i === today ? 'today' : ''}" style="width:${dw}px">${show && dw >= 20 ? `${d.getDate()}<br>${'日月火水木金土'[d.getDay()]}` : show ? `<br>${d.getDate()}` : ''}</div>`;
+    if (i === 0 || d.getDate() === 1) months += `<div class="g-month" style="left:${i * dw}px">${d.getMonth() + 1}月</div>`;
+  }
+  const grid = `background-image: repeating-linear-gradient(to right, transparent 0 ${dw - 1}px, var(--border) ${dw - 1}px ${dw}px);`;
+  let html = `<div class="g-row g-head" style="min-height:44px">
+    <div class="g-label" style="width:${labelW}px;font-weight:600">タスク</div>
+    <div class="g-track" style="width:${trackW}px;padding-top:12px">${months}${head}</div></div>`;
+
+  const rows = visibleRows();
+  const bar = (cls, s, e, title) => {
+    const a = Math.max(0, s), b = Math.min(days, e + 1);
+    if (b <= a) return '';
+    return `<div class="bar ${cls}" style="left:${a * dw}px;width:${(b - a) * dw - 2}px" title="${esc(title)}"></div>`;
+  };
+  rows.forEach(({ task: t, depth, hasChildren }) => {
+    const c = catOf(t.categoryId);
+    let bars = '';
+    if (t.planStart || t.planEnd) {
+      const ps = idx(t.planStart || t.planEnd), pe = idx(t.planEnd || t.planStart);
+      bars += bar('plan', ps, pe, `予定: ${t.planStart || '?'} 〜 ${t.planEnd || '?'}`);
+    }
+    if (t.actualStart) {
+      const as = idx(t.actualStart);
+      const open = !t.actualEnd;
+      const ae = open ? today : idx(t.actualEnd);
+      const title = `実績: ${t.actualStart} 〜 ${t.actualEnd || '進行中'}`;
+      const pe = t.planEnd ? idx(t.planEnd) : null;
+      if (pe !== null && ae > pe) {
+        bars += bar('actual' + (open ? ' open' : ''), as, Math.max(as - 1, pe), title);
+        bars += bar('over', Math.max(as, pe + 1), ae, title + '（予定超過）');
+      } else {
+        bars += bar('actual' + (open ? ' open' : ''), as, ae, title);
+      }
+    }
+    if (t.dueAt) {
+      const di = idx(t.dueAt);
+      if (di >= 0 && di < days) bars += `<div class="due-mark" style="left:${(di + 1) * dw}px" title="期限: ${fmtDT(t.dueAt)}"></div>`;
+    }
+    if (today >= 0 && today < days) bars += `<div class="today-line" style="left:${today * dw + dw / 2}px"></div>`;
+    html += `<div class="g-row" data-id="${t.id}">
+      <div class="g-label" style="width:${labelW}px;padding-left:${8 + depth * 16}px">
+        <button class="toggle ${hasChildren ? '' : 'none'}" data-act="toggle">${t.collapsed ? '▶' : '▼'}</button>
+        <span class="prio p${t.priority}" style="width:18px;height:18px;font-size:11px">${t.priority}</span>
+        ${c ? `<span style="width:8px;height:8px;border-radius:50%;background:${esc(c.color)};flex:none"></span>` : ''}
+        <span class="t" style="${t.status === 'done' ? 'text-decoration:line-through;color:var(--muted)' : alertOf(t) === 'overdue' ? 'color:var(--danger);font-weight:600' : ''}" title="${esc(t.title)}（${STATUS[t.status]}）">${esc(t.title)}</span>
+      </div>
+      <div class="g-track" style="width:${trackW}px;${grid}" data-act="edit">${bars}</div>
+    </div>`;
+  });
+  if (!rows.length) html += `<div class="empty">表示するタスクがありません</div>`;
+  $('#gantt').style.width = (labelW + trackW) + 'px';
+  $('#gantt').innerHTML = html;
+}
+
+/* ========== Task dialog ========== */
+function openTaskDialog(id, parentId = null) {
+  ui.editingId = id;
+  const t = id ? byId(id) : null;
+  const f = $('#taskForm');
+  $('#dlgTitle').textContent = t ? 'タスクを編集' : '新しいタスク';
+  // parent options (exclude self & descendants)
+  const excluded = new Set(t ? [t.id, ...descendants(t.id).map(d => d.id)] : []);
+  const opts = ['<option value="">（なし：最上位）</option>'];
+  const walk = (pid, depth) => childrenOf(pid).forEach(c => {
+    if (excluded.has(c.id)) return;
+    opts.push(`<option value="${c.id}">${'　'.repeat(depth)}${depth ? '└ ' : ''}${esc(c.title)}</option>`);
+    walk(c.id, depth + 1);
+  });
+  walk(null, 0);
+  f.elements.parentId.innerHTML = opts.join('');
+  f.elements.categoryId.innerHTML = '<option value="">（未分類）</option>' +
+    state.categories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  const parent = parentId ? byId(parentId) : null;
+  const v = t || { title: '', parentId, categoryId: parent?.categoryId || '', priority: 3, status: 'todo',
+    planStart: '', planEnd: '', actualStart: '', actualEnd: '', dueAt: '', reminderAt: '', memo: '' };
+  for (const k of ['title', 'parentId', 'categoryId', 'priority', 'status', 'planStart', 'planEnd', 'actualStart', 'actualEnd', 'dueAt', 'reminderAt', 'memo'])
+    f.elements[k].value = v[k] ?? '';
+  $('#dlgTask').showModal();
+  f.elements.title.focus();
+}
+
+$('#taskForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target;
+  const val = k => f.elements[k].value.trim();
+  if (!val('title')) return;
+  if (val('planStart') && val('planEnd') && val('planStart') > val('planEnd')) { toast('入力エラー', '予定の終了日が開始日より前です', 'danger'); return; }
+  if (val('actualStart') && val('actualEnd') && val('actualStart') > val('actualEnd')) { toast('入力エラー', '実績の終了日が開始日より前です', 'danger'); return; }
+  let t = ui.editingId ? byId(ui.editingId) : null;
+  if (!t) {
+    t = { id: uid(), createdAt: Date.now(), collapsed: false, reminded: false };
+    state.tasks.push(t);
+  }
+  if (t.reminderAt !== val('reminderAt')) t.reminded = false;
+  Object.assign(t, {
+    title: val('title'), parentId: val('parentId') || null, categoryId: val('categoryId') || null,
+    priority: Number(val('priority')), planStart: val('planStart'), planEnd: val('planEnd'),
+    actualStart: val('actualStart'), actualEnd: val('actualEnd'), dueAt: val('dueAt'),
+    reminderAt: val('reminderAt'), memo: f.elements.memo.value,
+  });
+  const st = val('status');
+  if (t.status !== st) setStatus(t, st); else t.status = st;
+  if (t.parentId) { const p = byId(t.parentId); if (p) p.collapsed = false; }
+  save(); $('#dlgTask').close(); render();
+});
+$('#btnCancelTask').onclick = () => $('#dlgTask').close();
+
+/* ========== Row interactions ========== */
+function handleRowAction(e) {
+  const actEl = e.target.closest('[data-act]');
+  const row = e.target.closest('[data-id]');
+  if (!actEl || !row) return;
+  const t = byId(row.dataset.id);
+  if (!t) return;
+  const act = actEl.dataset.act;
+  if (e.type === 'change' && act === 'status') {
+    setStatus(t, actEl.value);
+    save(); render();
+    return;
+  }
+  if (e.type !== 'click') return;
+  if (act === 'toggle') { t.collapsed = !t.collapsed; save(); render(); }
+  else if (act === 'edit') openTaskDialog(t.id);
+  else if (act === 'child') openTaskDialog(null, t.id);
+  else if (act === 'delete') {
+    const n = descendants(t.id).length;
+    if (!confirm(`「${t.title}」を削除しますか？${n ? `\n子タスク ${n} 件も削除されます。` : ''}`)) return;
+    const ids = new Set([t.id, ...descendants(t.id).map(d => d.id)]);
+    state.tasks = state.tasks.filter(x => !ids.has(x.id));
+    save(); render();
+  }
+}
+['click', 'change'].forEach(ev => {
+  $('#list').addEventListener(ev, handleRowAction);
+  $('#gantt').addEventListener(ev, handleRowAction);
+});
+
+$('#quickAdd').addEventListener('submit', e => {
+  e.preventDefault();
+  const title = $('#quickTitle').value.trim();
+  if (!title) return;
+  state.tasks.push({ id: uid(), parentId: null, title, memo: '', priority: 3, categoryId: null, status: 'todo',
+    planStart: '', planEnd: '', actualStart: '', actualEnd: '', dueAt: '', reminderAt: '', reminded: false,
+    collapsed: false, createdAt: Date.now() });
+  $('#quickTitle').value = '';
+  save(); render();
+});
+$('#btnAddDetail').onclick = () => openTaskDialog(null);
+$('#btnExpand').onclick = () => { state.tasks.forEach(t => t.collapsed = false); save(); render(); };
+$('#btnCollapse').onclick = () => { state.tasks.forEach(t => t.collapsed = childrenOf(t.id).length > 0); save(); render(); };
+['#fStatus', '#fCat', '#fPrio', '#fAlert', '#fSort'].forEach(s => $(s).addEventListener('change', render));
+$('#fText').addEventListener('input', render);
+
+/* ========== Views / Gantt nav ========== */
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  ui.view = b.dataset.view;
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+  $('#viewList').hidden = ui.view !== 'list';
+  $('#viewGantt').hidden = ui.view !== 'gantt';
+  render();
+});
+const shiftGantt = dir => { const d = Number($('#gScale').value); ui.ganttStart = addDays(ui.ganttStart, dir * Math.round(d / 2)); renderGantt(); };
+$('#gPrev').onclick = () => shiftGantt(-1);
+$('#gNext').onclick = () => shiftGantt(1);
+$('#gToday').onclick = () => {
+  const d = Number($('#gScale').value);
+  ui.ganttStart = addDays(new Date(new Date().setHours(0, 0, 0, 0)), -Math.round(d / 4));
+  renderGantt();
+};
+$('#gScale').onchange = () => $('#gToday').onclick();
+
+function showAlertFilter(kind) {
+  $('#fAlert').value = kind;
+  $('#fStatus').value = '';
+  if (ui.view !== 'list') document.querySelector('.tabs button[data-view=list]').click(); else render();
+}
+$('#badgeOver').onclick = () => showAlertFilter('overdue');
+$('#badgeSoon').onclick = () => showAlertFilter('soon');
+
+/* ========== Settings / categories ========== */
+let draftCats = [];
+function renderCatEditor() {
+  $('#catList').innerHTML = draftCats.map((c, i) => `<div class="cat-row" data-i="${i}">
+    <input type="color" value="${esc(c.color)}" data-k="color">
+    <input type="text" value="${esc(c.name)}" data-k="name" placeholder="カテゴリ名">
+    <button type="button" data-del="${i}">削除</button></div>`).join('') || '<p style="color:var(--muted)">カテゴリがありません</p>';
+}
+$('#catList').addEventListener('input', e => {
+  const row = e.target.closest('.cat-row'); if (!row) return;
+  draftCats[row.dataset.i][e.target.dataset.k] = e.target.value;
+});
+$('#catList').addEventListener('click', e => {
+  const i = e.target.dataset.del; if (i === undefined) return;
+  draftCats.splice(Number(i), 1); renderCatEditor();
+});
+$('#btnAddCat').onclick = () => {
+  const colors = ['#8b5cf6', '#ec4899', '#14b8a6', '#ef4444', '#84cc16', '#0ea5e9'];
+  draftCats.push({ id: uid(), name: '', color: colors[draftCats.length % colors.length] });
+  renderCatEditor();
+  $('#catList .cat-row:last-child input[type=text]').focus();
+};
+$('#btnSettings').onclick = () => {
+  draftCats = state.categories.map(c => ({ ...c }));
+  renderCatEditor();
+  $('#soonHours').value = state.settings.soonHours;
+  $('#dlgSettings').showModal();
+};
+$('#settingsForm').addEventListener('submit', e => {
+  e.preventDefault();
+  state.categories = draftCats.filter(c => c.name.trim()).map(c => ({ ...c, name: c.name.trim() }));
+  const ids = new Set(state.categories.map(c => c.id));
+  state.tasks.forEach(t => { if (t.categoryId && !ids.has(t.categoryId)) t.categoryId = null; });
+  state.settings.soonHours = Math.max(1, Number($('#soonHours').value) || 24);
+  save(); $('#dlgSettings').close(); render();
+});
+$('#btnCancelSettings').onclick = () => $('#dlgSettings').close();
+
+/* ========== Export / Import ========== */
+$('#btnExport').onclick = () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `tasks-${todayStr().replace(/-/g, '')}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$('#btnImport').onclick = () => $('#fileImport').click();
+$('#fileImport').onchange = async e => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  try {
+    const s = JSON.parse(await file.text());
+    if (!Array.isArray(s.tasks) || !Array.isArray(s.categories)) throw new Error('形式が正しくありません');
+    if (!confirm(`タスク ${s.tasks.length} 件を読み込みます。現在のデータは置き換えられます。よろしいですか？`)) return;
+    s.settings = Object.assign({ soonHours: 24 }, s.settings);
+    state = s; save(); render();
+    toast('インポート完了', `${s.tasks.length} 件のタスクを読み込みました`);
+  } catch (err) { toast('インポート失敗', err.message, 'danger'); }
+};
+
+/* ========== Notifications / reminders / alerts ========== */
+function toast(title, body = '', kind = '') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  el.innerHTML = `<b>${esc(title)}</b>${esc(body).replace(/\n/g, '<br>')}`;
+  el.onclick = () => el.remove();
+  $('#toasts').appendChild(el);
+  setTimeout(() => el.remove(), kind === 'danger' ? 12000 : 8000);
+}
+function notify(title, body, kind) {
+  toast(title, body, kind);
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try { new Notification(title, { body }); } catch (e) { /* ignore */ }
+  }
+}
+function updateNotifyButton() {
+  $('#btnNotify').hidden = !('Notification' in window) || Notification.permission !== 'default';
+}
+$('#btnNotify').onclick = async () => {
+  await Notification.requestPermission();
+  updateNotifyButton();
+  if (Notification.permission === 'granted') notify('通知が有効になりました', 'リマインダー時刻にデスクトップ通知が届きます');
+};
+
+let lastAlertSig = '';
+const alertSig = () => state.tasks.map(t => t.id + alertOf(t)).join('|');
+function tick() {
+  const now = Date.now();
+  let changed = false;
+  state.tasks.forEach(t => {
+    if (t.reminderAt && !t.reminded && t.status !== 'done' && new Date(t.reminderAt).getTime() <= now) {
+      t.reminded = true; changed = true;
+      notify('🔔 リマインダー', `${t.title}${t.dueAt ? `\n期限: ${fmtDT(t.dueAt)}` : ''}`);
+    }
+    // 新たに期限切れになったタスクを通知
+    const a = alertOf(t);
+    if (lastAlertSig && a === 'overdue' && !lastAlertSig.includes(t.id + 'overdue')) {
+      notify('⚠ 期限切れ', t.title, 'danger');
+    }
+  });
+  if (changed) save();
+  const sig = alertSig();
+  if (changed || sig !== lastAlertSig) {
+    lastAlertSig = sig;
+    // ダイアログ操作中は再描画を避ける
+    if (!$('#dlgTask').open && !$('#dlgSettings').open) render(); else renderBadges();
+  }
+}
+
+function startupAlerts() {
+  const over = state.tasks.filter(t => alertOf(t) === 'overdue');
+  const soon = state.tasks.filter(t => alertOf(t) === 'soon');
+  if (over.length) notify(`⚠ 期限切れ ${over.length} 件`, over.slice(0, 5).map(t => '・' + t.title).join('\n'), 'danger');
+  if (soon.length) notify(`⏰ 期限間近 ${soon.length} 件`, soon.slice(0, 5).map(t => `・${t.title}（${fmtDT(t.dueAt)}）`).join('\n'), 'warn');
+}
+
+/* ========== Init ========== */
+save();
+render();
+updateNotifyButton();
+startupAlerts();
+lastAlertSig = alertSig();
+tick();
+setInterval(tick, 30000);
+</script>
+</body>
+</html>
